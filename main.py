@@ -11,13 +11,16 @@ f = IDS_DIR / "id_list_00s.txt"
 chosen_ids = f.open().readlines()
 print(f"{len(chosen_ids)} are chosen.")
 
-dataset = {}
-for i in chosen_ids:
-    try:
-        npz_dir = dataloader.msd_id_to_dirs(i)
-        npz = dataloader.msd_id_to_pianoroll(npz_dir)
-        dataset[i] = npz
-    except:
-        continue
+# dataset = {}
+# for f in ids:
+#     f = IDS_DIR / "id_list_00s.txt"
+#     chosen_ids = f.open().readlines()
+#     for i in chosen_ids:
+#         try:
+#             npz_dir = dataloader.msd_id_to_dirs(i)
+#             npz = dataloader.msd_id_to_pianoroll(npz_dir)
+#             dataset[i] = npz
+#         except:
+#             continue
 
-print(f"{len(dataset)}")
+# print(f"{len(dataset)}")
