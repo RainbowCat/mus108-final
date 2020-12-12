@@ -52,21 +52,19 @@ STYLE_WEIGHT = args.sw
 NUM_EPOCHS = args.n
 LEARN_RATE = args.lr
 
-from panns_inference import AudioTagging, SoundEventDetection, labels
+from typing import (Dict, Iterable, List, Mapping, NamedTuple, Optional,
+                    Sequence)
+
 import librosa
-from typing import Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence
-
-
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.optim import Adam
-from torch import tensor, distributions, nn, Tensor
+from panns_inference import AudioTagging, SoundEventDetection, labels
+from torch import Tensor, distributions, nn, tensor
 from torch.nn import Linear, ReLU, Sequential, Softmax
+from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 
-from panns_inference import AudioTagging, SoundEventDetection, labels
-import librosa
 
 class SaveActivations:
     def __init__(self):
