@@ -3,3 +3,5 @@ __pycache__/
 # dataset
 genres/
 genres.tar.gz
+genres
+music_speech
