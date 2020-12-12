@@ -1,5 +1,8 @@
 __pycache__/
 
+# pretrained model
+*.pth
+
 # dataset
 genres/
 genres.tar.gz
