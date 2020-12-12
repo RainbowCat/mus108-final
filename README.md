@@ -12,6 +12,30 @@ ffmpeg -ss $START_TIME -t 30 -i "$IN_FILE" "$OUT_FILE"
 
 ## Requirements
 
+**0. Prepare data**
+
+```
+.
+├── Cnn14_mAP=0.431.pth
+├── data
+│   ├── content.wav
+│   └── style.wav
+└── genres
+    ├── blues (100 files)
+    ├── classical (100 files)
+    ├── country (100 files)
+    ├── disco (100 files)
+    ├── hiphop (100 files)
+    ├── jazz (100 files)
+    ├── metal (100 files)
+    ├── pop (100 files)
+    ├── reggae (100 files)
+    └── rock (100 files)
+
+```
+
+**1. Packages**
+
 ```
 pip install --user pipenv
 pipenv install
