@@ -21,18 +21,11 @@ def init_bn(bn):
     bn.weight.data.fill_(1.0)
 
 
-class SaveOutput:
-    def __init__(self):
-        self.output = {}
-
-    def __call__(self, module, _, output):
-        self.output[module.__name__] = output
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
 
         super().__init__()
-        self.save_output = SaveOutput()
 
         self.conv1 = nn.Conv2d(
             in_channels=in_channels,
@@ -51,8 +44,6 @@ class ConvBlock(nn.Module):
             bias=False,
         )
 
-        for layer in [self.conv1, self.conv2]:
-            layer.register_forward_hook(self.save_output)
 
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
