@@ -7,7 +7,7 @@ from torchlibrosa.stft import LogmelFilterBank, Spectrogram
 
 
 def init_layer(layer):
-    """Initialize a Linear or Convolutional layer. """
+    """Initialize a Linear or Convolutional layer."""
     nn.init.xavier_uniform_(layer.weight)
 
     if hasattr(layer, "bias"):
@@ -16,15 +16,23 @@ def init_layer(layer):
 
 
 def init_bn(bn):
-    """Initialize a Batchnorm layer. """
+    """Initialize a Batchnorm layer."""
     bn.bias.data.fill_(0.0)
     bn.weight.data.fill_(1.0)
 
+
+class SaveOutput:
+    def __init__(self):
+        self.output = {}
+
+    def __call__(self, module, _, output):
+        self.output[module.__name__] = output
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
 
         super().__init__()
+        self.save_output = SaveOutput()
 
         self.conv1 = nn.Conv2d(
             in_channels=in_channels,
@@ -34,7 +42,6 @@ class ConvBlock(nn.Module):
             padding=(1, 1),
             bias=False,
         )
-
         self.conv2 = nn.Conv2d(
             in_channels=out_channels,
             out_channels=out_channels,
@@ -43,6 +50,9 @@ class ConvBlock(nn.Module):
             padding=(1, 1),
             bias=False,
         )
+
+        for layer in [self.conv1, self.conv2]:
+            layer.register_forward_hook(self.save_output)
 
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -55,11 +65,15 @@ class ConvBlock(nn.Module):
         init_bn(self.bn1)
         init_bn(self.bn2)
 
-    def forward(self, input, pool_size=(2, 2), pool_type="avg"):
+    def forward(self, x, pool_size=(2, 2), pool_type="avg"):
 
-        x = input
-        x = F.relu_(self.bn1(self.conv1(x)))
-        x = F.relu_(self.bn2(self.conv2(x)))
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
+
         if pool_type == "max":
             x = F.max_pool2d(x, kernel_size=pool_size)
         elif pool_type == "avg":
@@ -71,7 +85,7 @@ class ConvBlock(nn.Module):
         else:
             raise Exception("Incorrect argument!")
 
-        return x
+        return x, self.save_output.output
 
 
 class Cnn14(nn.Module):
@@ -122,12 +136,14 @@ class Cnn14(nn.Module):
 
         self.bn0 = nn.BatchNorm2d(64)
 
-        self.conv_block1 = ConvBlock(in_channels=1, out_channels=64)
-        self.conv_block2 = ConvBlock(in_channels=64, out_channels=128)
-        self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
-        self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
-        self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
-        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=2048)
+        self.conv_block1, a1 = ConvBlock(in_channels=1, out_channels=64)
+        self.conv_block2, a2 = ConvBlock(in_channels=64, out_channels=128)
+        self.conv_block3, a3 = ConvBlock(in_channels=128, out_channels=256)
+        self.conv_block4, a4 = ConvBlock(in_channels=256, out_channels=512)
+        self.conv_block5, a5 = ConvBlock(in_channels=512, out_channels=1024)
+        self.conv_block6, a6 = ConvBlock(in_channels=1024, out_channels=2048)
+
+        self.activations=[a1,a2,a3,a4,a5]
 
         self.fc1 = nn.Linear(2048, 2048, bias=True)
         self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
