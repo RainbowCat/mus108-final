@@ -6,6 +6,12 @@ name = "pypi"
 [packages]
 torch = "*"
 librosa = "*"
+numpy = "*"
+h5py = "*"
+sklearn = "*"
+matplotlib = "*"
+ipython = "*"
+torchlibrosa = "*"
 
 [dev-packages]
 
