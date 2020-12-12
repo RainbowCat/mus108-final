@@ -12,7 +12,7 @@ The dataset can be downloaded from http://marsyas.info/downloads/datasets.html
 
 **0. Prepare data**
 
-Download and upzip data, the data looks like:
+Download and unzip data, the data looks like:
 
 <pre>
 dataset_root
