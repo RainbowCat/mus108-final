@@ -1,7 +1,7 @@
-#!bin/bash
+#!/usr/bin/env bash
 
-DATASET_DIR="/home/tiger/datasets/GTZAN/dataset_root"
-WORKSPACE="/home/tiger/workspaces/panns_transfer_to_gtzan"
+DATASET_DIR="genre"
+WORKSPACE="$HOME/mus108-final"
 
 python3 utils/features.py pack_audio_files_to_hdf5 --dataset_dir=$DATASET_DIR --workspace=$WORKSPACE --mini_data
 
