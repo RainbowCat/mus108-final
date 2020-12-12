@@ -1,5 +1,22 @@
 # Music Style Transfer
 
+## Dataset
+
+One source file and one target style file, both in wav format.
+
+Then for each file run:
+
+```
+ffmpeg -ss $START_TIME -t 30 -i "$IN_FILE" "$OUT_FILE"
+```
+
+## Requirements
+
+```
+pip install --user pipenv
+pipenv install
+```
+
 # GTZAN classification finetuned on pretrained audio neural networks (PANNs)
 
 Music genre classification is a task to classify audio clips into genres such as jazz, classical, etc. GTZAN is a music genre dataset containing 1000 30-second audio clips with 10 genres. In this codebase, we fine-tune PANNs [1] to build music classification systems.
@@ -30,7 +47,13 @@ dataset_root
 
 **1. Requirements**
 
-python 3.6 + pytorch 1.0
+```
+pip install --user pipenv
+pipenv install
+```
+
+or use:
+`python 3.6 + pytorch 1.0`
 
 **2. Then simply run:**
 
