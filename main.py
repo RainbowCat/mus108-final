@@ -36,8 +36,8 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 TMP_DIR = Path("tmp")
 TMP_DIR.mkdir(exist_ok=True)
-OUT_DIR = Path("output")
-OUT_DIR.mkdir(exist_ok=True)
+# OUT_DIR = Path("output")
+# OUT_DIR.mkdir(exist_ok=True)
 
 
 class SaveActivations:
@@ -207,8 +207,7 @@ def main(args) -> None:
 
     styled = style_extractor.styled.data.detach().cpu().numpy()
     soundfile.write(  # save wav files
-        file=OUT_DIR
-        / f"{args.content_wav.stem}-{args.style_wav.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}.wav",
+        file=f"{args.content_wav.stem}-{args.style_wav.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}.wav",
         data=styled,
         samplerate=32_000,
     )
