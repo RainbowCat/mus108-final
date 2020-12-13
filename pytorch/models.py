@@ -21,7 +21,6 @@ def init_bn(bn):
     bn.weight.data.fill_(1.0)
 
 
-
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
 
@@ -43,7 +42,6 @@ class ConvBlock(nn.Module):
             padding=(1, 1),
             bias=False,
         )
-
 
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -134,7 +132,7 @@ class Cnn14(nn.Module):
         self.conv_block5, a5 = ConvBlock(in_channels=512, out_channels=1024)
         self.conv_block6, a6 = ConvBlock(in_channels=1024, out_channels=2048)
 
-        self.activations=[a1,a2,a3,a4,a5]
+        self.activations = [a1, a2, a3, a4, a5]
 
         self.fc1 = nn.Linear(2048, 2048, bias=True)
         self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
