@@ -1,4 +1,5 @@
 __pycache__/
+lightning_logs/
 
 # pretrained model
 *.pth
@@ -8,3 +9,5 @@ genres/
 genres.tar.gz
 genres
 music_speech
+
+output/
