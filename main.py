@@ -75,6 +75,9 @@ class StyleTransferModel(pl.LightningModule):
         self, content_wav, style_wav, content_weight, style_weight, learn_rate
     ):
         super().__init__()
+        self.content_wav = content_wav
+        self.style_wav = style_wav
+
         self.save_hyperparameters()
 
         self.register_buffer(
@@ -111,14 +114,16 @@ class StyleTransferModel(pl.LightningModule):
         for i, c in enumerate(self.activation_hook.output):
             self.register_buffer(f"content_target_{i}", c.detach())
 
-        with open(TMP_DIR / "content_activations.pkl", "wb") as f:
+        with open(
+            TMP_DIR / f"{self.content_wav.stem}-content_activations.pkl", "wb"
+        ) as f:
             pickle.dump(self.activation_hook.output, f)
         self.activation_hook.clear()
 
         self(self.style.unsqueeze(0))
         for i, s in enumerate(self.activation_hook.output):
             self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
-        with open(TMP_DIR / "style_activations.pkl", "wb") as f:
+        with open(TMP_DIR / f"{self.style_wav.stem}-style_activations.pkl", "wb") as f:
             pickle.dump(self.activation_hook.output, f)
         self.activation_hook.clear()
 
@@ -207,7 +212,7 @@ def main(args) -> None:
     )
 
     dummy_loader = DataLoader(DummySet(), batch_size=1)
-    trainer = pl.Trainer(max_epochs=args.num_epochs, gpus=1)
+    trainer = pl.Trainer(max_epochs=args.num_epochs, gpus=torch.cuda.device_count())
     trainer.fit(style_extractor, dummy_loader)
 
     styled = style_extractor.styled.data.detach().cpu().numpy()
