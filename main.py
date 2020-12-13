@@ -75,6 +75,7 @@ class StyleTransferModel(pl.LightningModule):
         self, content_wav, style_wav, content_weight, style_weight, learn_rate
     ):
         super().__init__()
+        self.save_hyperparameters()
 
         self.register_buffer(
             "content",
