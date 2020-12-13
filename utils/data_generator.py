@@ -6,7 +6,6 @@ import time
 
 import config
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 from utilities import int16_to_float32
 
