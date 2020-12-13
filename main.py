@@ -34,6 +34,11 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 # TODO add TOTAL_VARIATION
 
+TMP_DIR = Path("tmp")
+TMP_DIR.mkdir(exist_ok=True)
+OUT_DIR = Path("output")
+OUT_DIR.mkdir(exist_ok=True)
+
 
 class SaveActivations:
     def __init__(self):
@@ -66,22 +71,22 @@ SoundEventDetection.__call__ = inference
 
 
 class StyleTransferModel(pl.LightningModule):
-    def __init__(self, args):
+    def __init__(
+        self, content_wav, style_wav, content_weight, style_weight, learn_rate
+    ):
         super().__init__()
-        self.args = args
 
         self.register_buffer(
-            "style",
-            torch.tensor(
-                librosa.core.load(self.args.style_wav, sr=32000, mono=True)[0]
-            ),
+            "content",
+            torch.tensor(librosa.core.load(content_wav, sr=32000, mono=True)[0]),
         )
         self.register_buffer(
-            "content",
-            torch.tensor(
-                librosa.core.load(self.args.content_wav, sr=32000, mono=True)[0]
-            ),
+            "style",
+            torch.tensor(librosa.core.load(style_wav, sr=32000, mono=True)[0]),
         )
+        self.content_weight = content_weight
+        self.style_weight = style_weight
+        self.lr = learn_rate
 
         self.base_model = SoundEventDetection(
             checkpoint_path=None, device=self.device
@@ -134,10 +139,7 @@ class StyleTransferModel(pl.LightningModule):
             F.mse_loss(gram_matrix(s), getattr(self, f"style_target_{i}"))
             for i, s in enumerate(style_vals)
         )
-        total_loss = (
-            self.args.content_weight * content_loss
-            + self.args.style_weight * style_loss
-        )
+        total_loss = self.content_weight * content_loss + self.style_weight * style_loss
 
         self.log("content_loss", content_loss, prog_bar=True)
         self.log("style_loss", style_loss, prog_bar=True)
@@ -146,7 +148,7 @@ class StyleTransferModel(pl.LightningModule):
         return total_loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam([self.styled.requires_grad_()], lr=self.args.lr)
+        return torch.optim.Adam([self.styled.requires_grad_()], lr=self.lr)
 
     def on_train_epoch_end(self, outputs):
 
@@ -159,7 +161,7 @@ class StyleTransferModel(pl.LightningModule):
                 pickle.dump(self.activation_hook.output, f)
 
             soundfile.write(  # save wav files
-                file=f"{stem}.wav",
+                file=TMP_DIR / f"{stem}.wav",
                 data=self.styled.data.detach().cpu().numpy(),
                 samplerate=32_000,
             )
@@ -190,7 +192,13 @@ class DummySet(Dataset):
 
 
 def main(args) -> None:
-    style_extractor = StyleTransferModel(args)
+    style_extractor = StyleTransferModel(
+        args.content_wav,
+        args.style_wav,
+        args.content_weight,
+        args.style_weight,
+        args.learn_rate,
+    )
 
     dummy_loader = DataLoader(DummySet(), batch_size=1)
     trainer = pl.Trainer(max_epochs=args.num_epochs)
@@ -198,7 +206,8 @@ def main(args) -> None:
 
     styled = style_extractor.styled.data.detach().cpu().numpy()
     soundfile.write(  # save wav files
-        file=f"{args.content_img.stem}-{args.style_img.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}.wav",
+        file=OUT_DIR
+        / f"{args.content_wav.stem}-{args.style_wav.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}.wav",
         data=styled,
         samplerate=32_000,
     )
@@ -208,15 +217,23 @@ if __name__ == "__main__":
     # parameters
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--content_wav", type=Path, default=Path("data/SpringDay_30.wav")
+        "content_wav", nargs="?", type=Path, default=Path("data/SpringDay_30.wav")
     )
     parser.add_argument(
-        "--style_wav", type=Path, default=Path("data/HighwayToHell_30.wav")
+        "style_wav", nargs="?", type=Path, default=Path("data/HighwayToHell_30.wav")
     )
-    parser.add_argument("--content-weight", type=float, default=1)
-    parser.add_argument("--style-weight", type=float, default=1e6)
-    parser.add_argument("--num-epochs", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument(
+        "content_weight", nargs="?", type=float, help="Content Weight", default=1e0
+    )
+    parser.add_argument(
+        "style_weight", nargs="?", type=float, help="Style Weight", default=1e6
+    )
+    parser.add_argument(
+        "num_epochs", nargs="?", type=int, help="Number of Epochs", default=10
+    )
+    parser.add_argument(
+        "learn_rate", nargs="?", type=float, help="Learning Rate", default=1e-3
+    )
     parser.add_argument("--checkpoint", type=Path, default=Path("Cnn14_mAP=0.431.pth"))
     parser.add_argument(
         "--device",
