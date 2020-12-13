@@ -10,181 +10,138 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import lru_cache, reduce
 from itertools import chain, product
 from os import PathLike
 from pathlib import Path
-from typing import (Dict, Iterable, List, Mapping, NamedTuple, Optional,
-                    Sequence)
+from typing import Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence
 
 import librosa
 import numpy as np
 import pytorch_lightning as pl
+import soundfile
 import torch
 import torch.nn.functional as F
 from panns_inference import AudioTagging, SoundEventDetection, labels
 from torch import Tensor, distributions, nn, tensor
-from torch.nn import Linear, ReLU, Sequential, Softmax
+from torch.nn import Conv2d, Linear, ReLU, Sequential, Softmax
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 
-# parameters
-parser = argparse.ArgumentParser()
-parser.add_argument("content_wav", type=Path, help="Content Wav File")
-parser.add_argument("style_wav", type=Path, help="Style Wav File")
-parser.add_argument("-cw", type=float, help="Content Weight", default=1)
-parser.add_argument("-sw", type=float, help="Style Weight", default=1e6)
-parser.add_argument("-n", type=int, help="Number of Epochs", default=10)
-parser.add_argument("-lr", type=float, help="Learning Rate", default=1e-3)
-args = parser.parse_args()
-
-CHECKPOINT = Path("Cnn14_mAP=0.431.pth")
-
-content_wav = args.content_wav
-style_wav = args.style_wav
-
-CONTENT_WEIGHT = args.cw
-STYLE_WEIGHT = args.sw
 # TODO add TOTAL_VARIATION
-
-NUM_EPOCHS = args.n
-LEARN_RATE = args.lr
-
-from typing import (Dict, Iterable, List, Mapping, NamedTuple, Optional,
-                    Sequence)
-
-import librosa
-import numpy as np
-import torch
-import torch.nn.functional as F
-from panns_inference import AudioTagging, SoundEventDetection, labels
-from torch import Tensor, distributions, nn, tensor
-from torch.nn import Linear, ReLU, Sequential, Softmax
-from torch.optim import Adam
-from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 
 class SaveActivations:
     def __init__(self):
-        self.output = {}
+        self.output = []
 
-    def __call__(self, module, _, output):
-        self.output[module.__name__] = output
+    def __call__(self, module, _, output) -> None:
+        self.output.append(output)
 
-
-activation_hook=SaveActivations()
-
-src_path = 'examples/R9_ZSCveAHg_7s.wav'
-(audio, _) = librosa.core.load(src_path, sr=32000, mono=True)
-audio = audio[None, :]  # (batch_size, segment_samples)
+    def clear(self) -> None:
+        self.output.clear()
 
 
-print('------ Sound event detection ------')
-sed = SoundEventDetection(checkpoint_path=None, device='cuda')
-framewise_output = sed.inference(audio)
+def inference(self, audio):
+    if "float" in str(audio.dtype):
+        audio = torch.Tensor(audio)
+    elif "int" in str(audio.dtype):
+        audio = torch.LongTensor(audio)
 
-net=SoundEventDetection(
+    audio = audio.to(self.device)
 
-        checkpoint_path=NotImplementedError,
-        device='cuda' if torch.cuda.is_available() else 'cpu'
+    output_dict = self.model(audio, None)
+    print(output_dict)
+
+    framewise_output = output_dict["framewise_output"].data.cpu().numpy()
+
+    return framewise_output
+
+
+SoundEventDetection.__call__ = inference
+
+
+class StyleTransferModel(pl.LightningModule):
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+
+        self.register_buffer(
+            "style",
+            torch.tensor(
+                librosa.core.load(self.args.style_wav, sr=32000, mono=True)[0]
+            ),
+        )
+        self.register_buffer(
+            "content",
+            torch.tensor(
+                librosa.core.load(self.args.content_wav, sr=32000, mono=True)[0]
+            ),
         )
 
-net.register_forward_hook(activation_hook)
+        self.base_model = SoundEventDetection(
+            checkpoint_path=None, device=self.device
+        ).model
+        self.base_model = self.base_model.eval()  # do not change weights
 
-# TODO run model
+        self.activation_hook = SaveActivations()
 
+        def apply_hook(layer):
+            if isinstance(layer, Conv2d):
+                layer.register_forward_hook(self.activation_hook)
 
-################################################################################
-
-# TODO select activations
-
-# TODO compute loss and optimize `input`
-
-# TODO write `input` to file
-
-
-class DummySet(Dataset):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def __getitem__(self, i):
-        dummy = torch.tensor(1)
-        return dummy
-
-    def __len__(self):
-        return 1
-
-def StyleTransferModel(pl.LightningModule):
-    def __init__(
-        self,
-        content_img,
-        style_img,
-        learn_rate,
-        content_idx=CONTENT_IDX,
-        style_idx=STYLE_IDX,
-        content_weight=CONTENT_WEIGHT,
-        style_weight=STYLE_WEIGHT,
-    ):
-        super().__init__()
-
-        vgg = vgg19(pretrained=True)
-        vgg = vgg.eval()  # do not change weights
-        vgg = vgg.features  # drop dense layers
-        self.base_model = vgg
+        self.base_model.apply(apply_hook)
 
         # initialize output styled image
-        self.styled_img = nn.Parameter(content_img.clone())
-        # self.styled_img = torch.rand_like(content_img)  # white noise image
+        self.styled = nn.Parameter(self.content.clone())
 
-        self.content_img = content_img
-        self.style_img = style_img
-
-        self.content_idx = content_idx
-        self.style_idx = style_idx
-
-        self.content_weight = content_weight
-        self.style_weight = style_weight
-
-        self.lr = learn_rate
-
-    def on_pretrain_routine_start(self):
+    def on_pretrain_routine_start(self) -> None:
         """Called when the pretrain routine begins."""
-        content_target, _, _ = self(self.content_img.unsqueeze(0))
-        _, style_target, _ = self(self.style_img.unsqueeze(0))
-
-        for i, c in enumerate(content_target):
+        self(self.content.unsqueeze(0))
+        for i, c in enumerate(self.activation_hook.output):
             self.register_buffer(f"content_target_{i}", c.detach())
-        for i, s in enumerate(style_target):
-            self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
+        self.activation_hook.clear()
 
-    def forward(self, img):
-        x = img
-        content_vals = []
-        style_vals = []
-        for i, layer in enumerate(self.base_model):
-            x = layer(x)  # forward
-            if i in self.content_idx:
-                content_vals.append(x)
-            if i in self.style_idx:
-                style_vals.append(x)
-        return content_vals, style_vals, x
+        self(self.style.unsqueeze(0))
+        for i, s in enumerate(self.activation_hook.output):
+            self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
+        self.activation_hook.clear()
+
+    def forward(self, x):
+        return self.base_model(x)
 
     def training_step(self, batch, batch_nb):
+        # XXX must be here to avoid accumulating state after end
+        self.activation_hook.clear()
 
         # unsqueeze for fake batch dimension required to fit network's input dimensions
-        content_vals, style_vals, res = self(self.styled_img.unsqueeze(0))
+        self(self.styled.unsqueeze(0))
+        activation_vals = self.activation_hook.output
+
+        # TODO see shape and pick
+        content_idxs = [0, 1, 2, 3]
+        style_idxs = [2, 4, 6, 8]
+        content_vals = [activation_vals[i] for i in content_idxs]
+        style_vals = [activation_vals[i] for i in style_idxs]
+
+        # print(f'{len(content_vals)=}')
+        # print(f'{content_vals=}')
 
         content_loss = sum(
             F.mse_loss(c, getattr(self, f"content_target_{i}"))
-            for i, c in enumerate(content_vals)
+            for i, c in zip(content_idxs, content_vals)
         )
         style_loss = sum(
             F.mse_loss(gram_matrix(s), getattr(self, f"style_target_{i}"))
-            for i, s in enumerate(style_vals)
+            for i, s in zip(style_idxs, style_vals)
         )
-        total_loss = self.content_weight * content_loss + self.style_weight * style_loss
+        total_loss = (
+            self.args.content_weight * content_loss
+            + self.args.style_weight * style_loss
+        )
 
         self.log("content_loss", content_loss, prog_bar=True)
         self.log("style_loss", style_loss, prog_bar=True)
@@ -193,24 +150,70 @@ def StyleTransferModel(pl.LightningModule):
         return total_loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam([self.styled_img.requires_grad_()], lr=self.lr)
+        return torch.optim.Adam([self.styled.requires_grad_()], lr=self.args.lr)
 
     def on_train_epoch_end(self, outputs):
         # TODO save wav files
-        pass
-        # save_image(self.styled_img, f"tmp-{time.time()}.jpg")
 
-def main():
-    style_extractor = StyleTransferModel(content_wav, style_wav, LEARN_RATE)
+        if random.random() < 0.3:
+
+            soundfile.write(
+                file=Path(f"output/{time.time()}.wav"),
+                data=self.styled.data.detach().cpu().numpy(),
+                samplerate=32_000,
+            )
+
+
+def main(args) -> None:
+    style_extractor = StyleTransferModel(args)
 
     dummy_loader = DataLoader(DummySet(), batch_size=1)
-    trainer = pl.Trainer(max_epochs=NUM_EPOCHS)
-    # trainer.fit(style_extractor, dummy_loader)
+    trainer = pl.Trainer(max_epochs=args.num_epochs)
+    trainer.fit(style_extractor, dummy_loader)
+    # TODO save to file
 
-    # styled_img = TF.resize(style_extractor.styled_img, content_img.size())
-    # save_image(styled_img, f"output-{time.time()}.jpg")
-    pass
+
+def gram_matrix(input):
+    """REFERENCE: <https://pytorch.org/tutorials/advanced/neural_style_tutorial.html/>"""
+    b, c, h, w = input.shape
+
+    features = input.view(b * c, h * w)  # resize F_XL into \hat F_XL
+
+    G = torch.mm(features, features.t())  # compute the gram product
+
+    # we 'normalize' the values of the gram matrix
+    return G / input.numel()
+
+
+class DummySet(Dataset):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __getitem__(self, _):
+        return torch.tensor(1)
+
+    def __len__(self) -> int:
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    # parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--content_wav", type=Path, default=Path("data/SpringDay_30.wav")
+    )
+    parser.add_argument(
+        "--style_wav", type=Path, default=Path("data/HighwayToHell_30.wav")
+    )
+    parser.add_argument("--content-weight", type=float, default=1)
+    parser.add_argument("--style-weight", type=float, default=1e6)
+    parser.add_argument("--num-epochs", type=int, default=10_000)
+    parser.add_argument("--lr", type=float, default=.01)
+    parser.add_argument("--checkpoint", type=Path, default=Path("Cnn14_mAP=0.431.pth"))
+    parser.add_argument(
+        "--device",
+        type=torch.device,
+        default=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    )
+    args = parser.parse_args()
+    main(args)

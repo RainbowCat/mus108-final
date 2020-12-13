@@ -13,9 +13,13 @@ matplotlib = "*"
 ipython = "*"
 torchlibrosa = "*"
 panns-inference = "*"
+pytorch-lightning = "*"
+pyqt5 = "*"
+soundfile = "*"
 
 [dev-packages]
 pylint = "*"
+pudb = "*"
 
 [requires]
 python_version = "3.8"
