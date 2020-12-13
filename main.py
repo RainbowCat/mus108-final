@@ -96,7 +96,7 @@ class StyleTransferModel(pl.LightningModule):
 
         self.base_model.apply(apply_hook)
 
-        # initialize output styled image
+        # initialize output styled audio
         self.styled = nn.Parameter(self.content.clone())
 
     def on_pretrain_routine_start(self) -> None:
@@ -149,7 +149,6 @@ class StyleTransferModel(pl.LightningModule):
         return torch.optim.Adam([self.styled.requires_grad_()], lr=self.args.lr)
 
     def on_train_epoch_end(self, outputs):
-        # TODO save wav files
 
         assert self.activation_hook.output, self.activation_hook_output
 
@@ -159,20 +158,11 @@ class StyleTransferModel(pl.LightningModule):
             with open(stem + ".pkl", "wb") as f:
                 pickle.dump(self.activation_hook.output, f)
 
-            soundfile.write(
-                file=f"{stem}.wav.",
+            soundfile.write(  # save wav files
+                file=f"{stem}.wav",
                 data=self.styled.data.detach().cpu().numpy(),
                 samplerate=32_000,
             )
-
-
-def main(args) -> None:
-    style_extractor = StyleTransferModel(args)
-
-    dummy_loader = DataLoader(DummySet(), batch_size=1)
-    trainer = pl.Trainer(max_epochs=args.num_epochs)
-    trainer.fit(style_extractor, dummy_loader)
-    # TODO save to file
 
 
 def gram_matrix(input):
@@ -197,6 +187,21 @@ class DummySet(Dataset):
 
     def __len__(self):
         return 1
+
+
+def main(args) -> None:
+    style_extractor = StyleTransferModel(args)
+
+    dummy_loader = DataLoader(DummySet(), batch_size=1)
+    trainer = pl.Trainer(max_epochs=args.num_epochs)
+    trainer.fit(style_extractor, dummy_loader)
+
+    styled = style_extractor.styled.data.detach().cpu().numpy()
+    soundfile.write(  # save wav files
+        file=f"{args.content_img.stem}-{args.style_img.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}.wav",
+        data=styled,
+        samplerate=32_000,
+    )
 
 
 if __name__ == "__main__":
