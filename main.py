@@ -160,7 +160,7 @@ class StyleTransferModel(pl.LightningModule):
                 pickle.dump(self.activation_hook.output, f)
 
             soundfile.write(
-                file=f"{time.time()}.wav",
+                file=f"{stem}.wav.",
                 data=self.styled.data.detach().cpu().numpy(),
                 samplerate=32_000,
             )
