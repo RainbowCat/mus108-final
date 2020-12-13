@@ -202,7 +202,7 @@ def main(args) -> None:
     )
 
     dummy_loader = DataLoader(DummySet(), batch_size=1)
-    trainer = pl.Trainer(max_epochs=args.num_epochs)
+    trainer = pl.Trainer(max_epochs=args.num_epochs, gpus=1)
     trainer.fit(style_extractor, dummy_loader)
 
     styled = style_extractor.styled.data.detach().cpu().numpy()
@@ -233,7 +233,7 @@ if __name__ == "__main__":
         "num_epochs", nargs="?", type=int, help="Number of Epochs", default=10
     )
     parser.add_argument(
-        "learn_rate", nargs="?", type=float, help="Learning Rate", default=1e-3
+        "learn_rate", nargs="?", type=float, help="Learning Rate", default=1e-1
     )
     parser.add_argument("--checkpoint", type=Path, default=Path("Cnn14_mAP=0.431.pth"))
     parser.add_argument(
