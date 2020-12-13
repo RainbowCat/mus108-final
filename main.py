@@ -114,18 +114,18 @@ class StyleTransferModel(pl.LightningModule):
         for i, c in enumerate(self.activation_hook.output):
             self.register_buffer(f"content_target_{i}", c.detach())
 
-        # with open(
-        #     TMP_DIR / f"{self.content_wav.stem}-content_activations.pkl", "wb"
-        # ) as f:
-        #     pickle.dump(self.activation_hook.output, f)
-        # self.activation_hook.clear()
+        with open(
+            TMP_DIR / f"{self.content_wav.stem}-content_activations.pkl", "wb"
+        ) as f:
+            pickle.dump(self.activation_hook.output, f)
+        self.activation_hook.clear()
 
-        # self(self.style.unsqueeze(0))
-        # for i, s in enumerate(self.activation_hook.output):
-        #     self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
-        # with open(TMP_DIR / f"{self.style_wav.stem}-style_activations.pkl", "wb") as f:
-        #     pickle.dump(self.activation_hook.output, f)
-        # self.activation_hook.clear()
+        self(self.style.unsqueeze(0))
+        for i, s in enumerate(self.activation_hook.output):
+            self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
+        with open(TMP_DIR / f"{self.style_wav.stem}-style_activations.pkl", "wb") as f:
+            pickle.dump(self.activation_hook.output, f)
+        self.activation_hook.clear()
 
     def forward(self, x):
         return self.base_model(x)
@@ -165,10 +165,10 @@ class StyleTransferModel(pl.LightningModule):
 
         assert self.activation_hook.output, self.activation_hook_output
 
-        stem = f"{time.time()}"
+        stem = f"{args.content_wav.stem}-{args.style_wav.stem},sw={args.style_weight},ne={args.num_epochs},lr={args.learn_rate}_{time.time()}.wav"
 
         if random.random() < 0.3:
-            with open(TMP_DIR / "{stem}.pkl", "wb") as f:
+            with open(TMP_DIR / f"{stem}.pkl", "wb") as f:
                 pickle.dump(self.activation_hook.output, f)
 
             soundfile.write(  # save wav files
