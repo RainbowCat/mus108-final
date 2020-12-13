@@ -34,7 +34,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 # TODO add TOTAL_VARIATION
 
-TMP_DIR = Path("tmp")
+TMP_DIR = Path("genre_activations")
 TMP_DIR.mkdir(exist_ok=True)
 # OUT_DIR = Path("output")
 # OUT_DIR.mkdir(exist_ok=True)
@@ -114,18 +114,18 @@ class StyleTransferModel(pl.LightningModule):
         for i, c in enumerate(self.activation_hook.output):
             self.register_buffer(f"content_target_{i}", c.detach())
 
-        # with open(
-        #     TMP_DIR / f"{self.content_wav.stem}-content_activations.pkl", "wb"
-        # ) as f:
-        #     pickle.dump(self.activation_hook.output, f)
-        # self.activation_hook.clear()
+        with open(
+            TMP_DIR / f"{self.content_wav.stem}-content_activations.pkl", "wb"
+        ) as f:
+            pickle.dump(self.activation_hook.output, f)
+        self.activation_hook.clear()
 
-        # self(self.style.unsqueeze(0))
-        # for i, s in enumerate(self.activation_hook.output):
-        #     self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
-        # with open(TMP_DIR / f"{self.style_wav.stem}-style_activations.pkl", "wb") as f:
-        #     pickle.dump(self.activation_hook.output, f)
-        # self.activation_hook.clear()
+        self(self.style.unsqueeze(0))
+        for i, s in enumerate(self.activation_hook.output):
+            self.register_buffer(f"style_target_{i}", gram_matrix(s).detach())
+        with open(TMP_DIR / f"{self.style_wav.stem}-style_activations.pkl", "wb") as f:
+            pickle.dump(self.activation_hook.output, f)
+        self.activation_hook.clear()
 
     def forward(self, x):
         return self.base_model(x)
@@ -162,20 +162,22 @@ class StyleTransferModel(pl.LightningModule):
         return torch.optim.Adam([self.styled.requires_grad_()], lr=self.lr)
 
     def on_train_epoch_end(self, outputs):
+        # XXX DO NOTHING
 
-        assert self.activation_hook.output, self.activation_hook_output
+        # assert self.activation_hook.output, self.activation_hook_output
 
-        stem = f"{time.time()}"
+        # stem = f"{time.time()}"
 
-        if random.random() < 0.3:
-            with open(TMP_DIR / "{stem}.pkl", "wb") as f:
-                pickle.dump(self.activation_hook.output, f)
+        # if random.random() < 0.3:
+        #     with open(TMP_DIR / "{stem}.pkl", "wb") as f:
+        #         pickle.dump(self.activation_hook.output, f)
 
-            soundfile.write(  # save wav files
-                file=TMP_DIR / f"{stem}.wav",
-                data=self.styled.data.detach().cpu().numpy(),
-                samplerate=32_000,
-            )
+        #     soundfile.write(  # save wav files
+        #         file=TMP_DIR / f"{stem}.wav",
+        #         data=self.styled.data.detach().cpu().numpy(),
+        #         samplerate=32_000,
+        #     )
+        pass
 
 
 def gram_matrix(input):
